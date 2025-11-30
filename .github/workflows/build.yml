@@ -18,6 +18,7 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
+        cache: false  # 禁用缓存
 
     - name: Build Windows
       run: go build -ldflags="-s -w" -o ech-win.exe ech-workers.go
@@ -38,6 +39,7 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
+        cache: false  # 禁用缓存
 
     - name: Build Linux
       run: |
@@ -60,6 +62,7 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
+        cache: false  # 禁用缓存
 
     - name: Build macOS
       run: |
