@@ -21,3 +21,6 @@ Usage of ech-win:
         身份验证令牌
 ```
 ##### 注：workers、pages、snippets三种部署都支持, TOKEN=xxx 部署时请更换
+
+### 🛠 开源代码引用
+- [https://github.com/hhsw2015/ech-workers](https://github.com/hhsw2015/ech-workers)
