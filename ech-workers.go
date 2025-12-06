@@ -38,6 +38,22 @@ var (
 	echList   []byte
 )
 
+// ======================== 缓冲区池 ========================
+
+// bufPool 用于复用 32KB 的缓冲区
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 32*1024) // 32KB 缓冲区
+	},
+}
+
+// udpBufPool 用于复用 UDP 缓冲区（64KB）
+var udpBufPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 64*1024) // 64KB 用于 UDP
+	},
+}
+
 func init() {
 	flag.StringVar(&listenAddr, "l", "127.0.0.1:30000", "代理监听地址 (支持 SOCKS5 和 HTTP)")
 	flag.StringVar(&serverAddr, "f", "", "服务端地址 (格式: x.x.workers.dev:443)")
@@ -666,7 +682,11 @@ func handleUDPAssociate(tcpConn net.Conn, clientAddr string) {
 
 func handleUDPRelay(udpConn *net.UDPConn, clientAddr string, stopChan chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
-	buf := make([]byte, 65535)
+
+	// 从池中获取缓冲区
+	buf := udpBufPool.Get().([]byte)
+	defer udpBufPool.Put(buf)
+
 	for {
 		select {
 		case <-stopChan:
@@ -895,10 +915,10 @@ func handleHTTP(conn net.Conn, clientAddr string, firstByte byte) {
 			}
 		}
 
-		firstFrame := requestBuilder.String()
+		firstFrame := []byte(requestBuilder.String())
 
 		// 使用 modeHTTPProxy 模式（不发送 200 响应）
-		if err := handleTunnel(conn, target, clientAddr, modeHTTPProxy, []byte(firstFrame)); err != nil {
+		if err := handleTunnel(conn, target, clientAddr, modeHTTPProxy, firstFrame); err != nil {
 			if !isNormalCloseError(err) {
 				log.Printf("[HTTP-%s] %s 代理失败: %v", method, clientAddr, err)
 			}
@@ -959,16 +979,20 @@ func handleTunnel(conn net.Conn, target, clientAddr string, mode int, firstFrame
 	// 如果没有预设的 firstFrame，尝试读取第一帧数据（仅 SOCKS5）
 	if firstFrame == nil && mode == modeSOCKS5 {
 		_ = conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-		buffer := make([]byte, 32*1024) // 限制最大读取 32KB
+		// 使用池化的缓冲区
+		buffer := bufPool.Get().([]byte)
 		n, _ := conn.Read(buffer)
 		_ = conn.SetReadDeadline(time.Time{})
 		if n > 0 && n <= 32*1024 {
-			firstFrame = buffer[:n]
+			firstFrame = make([]byte, n)
+			copy(firstFrame, buffer[:n])
 		} else if n > 32*1024 {
-			firstFrame = buffer[:32*1024]
+			firstFrame = make([]byte, 32*1024)
+			copy(firstFrame, buffer[:32*1024])
 		} else {
 			firstFrame = nil
 		}
+		bufPool.Put(buffer)
 	}
 
 	// 构建连接消息，包含代理 IP 信息
@@ -1022,7 +1046,10 @@ func handleTunnel(conn net.Conn, target, clientAddr string, mode int, firstFrame
 
 	// Client -> Server
 	go func() {
-		buf := make([]byte, 32768)
+		// 使用池化的缓冲区
+		buf := bufPool.Get().([]byte)
+		defer bufPool.Put(buf)
+
 		for {
 			n, err := conn.Read(buf)
 			if err != nil {
