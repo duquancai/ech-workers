@@ -28,7 +28,7 @@ func main() {
 	}
 
 	if cfg.ServerAddr == "" {
-		log.Fatal("必须指定服务端地址 -f\n\n示例:\n  ./ech-workers -l 127.0.0.1:1080 -f your-worker.workers.dev:443 -token your-token")
+		log.Fatal("必须指定服务端地址 -f\n\n示例:\n  ./ech-win -l 127.0.0.1:1080 -f your-worker.workers.dev:443 -token your-token")
 	}
 
 	// 初始化ECH管理器
