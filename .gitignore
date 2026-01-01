@@ -8,6 +8,7 @@
 *.dll
 *.so
 *.dylib
+*.vbs
 
 # 测试二进制文件
 *.test
