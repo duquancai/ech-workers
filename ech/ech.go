@@ -16,7 +16,11 @@ import (
 	"time"
 )
 
-const TypeHTTPS = 65
+const (
+	TypeHTTPS     = 65
+	MaxRetries    = 5
+	RetryInterval = 2 * time.Second
+)
 
 type ECHManager struct {
 	echList   []byte
@@ -33,22 +37,22 @@ func NewECHManager(echDomain, dnsServer string) *ECHManager {
 }
 
 func (m *ECHManager) Prepare() error {
-	for {
+	for attempt := 1; attempt <= MaxRetries; attempt++ {
 		echBase64, err := m.queryHTTPSRecord(m.echDomain, m.dnsServer)
 		if err != nil {
-			log.Printf("[客户端] DNS 查询失败: %v，2秒后重试...", err)
-			time.Sleep(2 * time.Second)
+			log.Printf("[客户端] DNS 查询失败 (%d/%d): %v，%v后重试...", attempt, MaxRetries, err, RetryInterval)
+			time.Sleep(RetryInterval)
 			continue
 		}
 		if echBase64 == "" {
-			log.Printf("[客户端] 未找到 ECH 参数，2秒后重试...")
-			time.Sleep(2 * time.Second)
+			log.Printf("[客户端] 未找到 ECH 参数 (%d/%d)，%v后重试...", attempt, MaxRetries, RetryInterval)
+			time.Sleep(RetryInterval)
 			continue
 		}
 		raw, err := base64.StdEncoding.DecodeString(echBase64)
 		if err != nil {
-			log.Printf("[客户端] ECH Base64 解码失败: %v，2秒后重试...", err)
-			time.Sleep(2 * time.Second)
+			log.Printf("[客户端] ECH Base64 解码失败 (%d/%d): %v，%v后重试...", attempt, MaxRetries, err, RetryInterval)
+			time.Sleep(RetryInterval)
 			continue
 		}
 		m.echListMu.Lock()
@@ -56,6 +60,7 @@ func (m *ECHManager) Prepare() error {
 		m.echListMu.Unlock()
 		return nil
 	}
+	return errors.New("ECH配置获取失败，已达最大重试次数")
 }
 
 func (m *ECHManager) GetECHList() ([]byte, error) {
